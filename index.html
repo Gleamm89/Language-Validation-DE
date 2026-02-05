@@ -554,10 +554,23 @@ async function runFromTextStream(getChunkReader){
       const { detected, trust } = detectLanguageHeuristic(val);
       const expected = "de";
 
-      // mismatch if confidently not German (or unknown but still somewhat confident)
-      // You can tighten this rule later.
-      const isMismatch = (detected !== "de" && detected !== "unknown") && trust >= 45;
 
+
+const { detected, trust, scores } = detectLanguageHeuristic(val);
+const expected = "de";
+
+const cleanLen = normalizeText(val).length;
+const longEnough = cleanLen >= 80;               // only do mixed checks on “real” text
+const englishPresent = (scores?.en ?? 0) >= 1.2; // ~1.2% stopword hit ratio is enough to catch “is / the / and ...”
+const mixed = (detected === "de" && longEnough && englishPresent);
+
+const isMismatch =
+  (detected !== "de" && trust >= 45) ||          // not German
+  (detected === "unknown" && longEnough) ||      // can’t decide but long text => suspicious
+  mixed;                                         // German but contains clear English
+
+
+      
       if (isMismatch){
         rowHasMismatch = true;
         mismatchCount++;
