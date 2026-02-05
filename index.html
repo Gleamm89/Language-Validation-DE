@@ -1,1 +1,658 @@
-to be filled
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DE Language Validator (POC)</title>
+  <style>
+    :root{
+      --bg:#D3B7DA;          /* Background requested */
+      --accent:#FF6A00;      /* vidaXL-ish orange */
+      --card:#ffffff;
+      --text:#1f1f1f;
+      --muted:#5a5a5a;
+      --border:rgba(0,0,0,.12);
+      --shadow:0 10px 30px rgba(0,0,0,.12);
+      --radius:16px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      background:var(--bg);
+      color:var(--text);
+    }
+    .wrap{
+      max-width:1100px;
+      margin:28px auto;
+      padding:0 16px 40px;
+    }
+    header{
+      display:flex;
+      gap:12px;
+      align-items:flex-end;
+      justify-content:space-between;
+      margin-bottom:16px;
+    }
+    h1{
+      margin:0;
+      font-size:22px;
+      letter-spacing:.2px;
+    }
+    .tag{
+      font-size:12px;
+      padding:6px 10px;
+      background:rgba(255,255,255,.6);
+      border:1px solid var(--border);
+      border-radius:999px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:16px;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:16px;
+    }
+    label{
+      display:block;
+      font-size:12px;
+      color:var(--muted);
+      margin-bottom:6px;
+    }
+    input[type="text"], textarea, select{
+      width:100%;
+      box-sizing:border-box;
+      font-size:14px;
+      padding:10px 12px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      outline:none;
+    }
+    textarea{ min-height:110px; font-family:var(--mono); font-size:12px; }
+    .row{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .row > *{ flex:1; min-width:220px; }
+    .btn{
+      background:var(--accent);
+      color:white;
+      border:none;
+      padding:10px 14px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    .btn:disabled{
+      opacity:.6;
+      cursor:not-allowed;
+    }
+    .btn.secondary{
+      background:#2b2b2b;
+      font-weight:600;
+    }
+    .stat{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:10px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .pill{
+      background:rgba(0,0,0,.04);
+      border:1px solid var(--border);
+      padding:6px 10px;
+      border-radius:999px;
+    }
+    .log{
+      margin-top:10px;
+      background:rgba(0,0,0,.04);
+      border:1px dashed var(--border);
+      border-radius:12px;
+      padding:10px;
+      font-family:var(--mono);
+      font-size:12px;
+      white-space:pre-wrap;
+      max-height:220px;
+      overflow:auto;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-size:13px;
+    }
+    th, td{
+      text-align:left;
+      padding:8px 10px;
+      border-bottom:1px solid var(--border);
+      vertical-align:top;
+    }
+    th{ font-size:12px; color:var(--muted); }
+    .small{ font-size:12px; color:var(--muted); }
+    .warn{ color:#b00020; font-weight:700; }
+    .ok{ color:#0b6b0b; font-weight:700; }
+    .mono{ font-family:var(--mono); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>DE Language Validator (POC)</h1>
+        <div class="small">Checks configured columns for <b>German</b> text. Outputs mismatches per <b>SKU/ID + Column</b> with a <b>Trust Score</b>.</div>
+      </div>
+      <div class="tag">Country: <b>DE</b></div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="row">
+          <div>
+            <label>CSV feed URL (will try streaming fetch; if CORS blocks, use upload below)</label>
+            <input id="url" type="text" value="https://transport.productsup.io/dca29732c8e4d5c6a6a4/channel/669063/salsify_new_products.csv" />
+          </div>
+          <div>
+            <label>Or upload a file</label>
+            <input id="file" type="file" accept=".csv,.txt" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <div>
+            <label>SKU/ID column name (auto-detect if possible)</label>
+            <input id="skuCol" type="text" value="id" />
+          </div>
+          <div>
+            <label>Min characters before checking language</label>
+            <input id="minChars" type="text" value="25" />
+          </div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <label>Columns to validate (one per line). Tip: start with title/description fields.</label>
+          <textarea id="columns">API_title
+API_name
+API_description
+API_short_description
+API_html_description
+API_Title_200_Amazon_Text
+API_title_200_text
+variation_general_title_new
+variation_general_description_new
+API_gallery_text-image_DE_1
+API_gallery_text-image_DE_2
+API_gallery_text-image_DE_3
+API_gallery_text-image_DE_4
+API_gallery_text-image_DE_5
+API_gallery_text-image_DE_6</textarea>
+          <div class="small">POC default list — you can edit this anytime.</div>
+        </div>
+
+        <div class="row" style="margin-top:12px;">
+          <button id="run" class="btn">RUN</button>
+          <button id="download" class="btn secondary" disabled>Download report (; delimited)</button>
+          <button id="reset" class="btn secondary">Reset</button>
+        </div>
+
+        <div class="stat" id="stats">
+          <span class="pill">Status: <span id="status">idle</span></span>
+          <span class="pill">Processed rows: <span id="rows">0</span></span>
+          <span class="pill">Mismatches: <span id="mismatches">0</span></span>
+          <span class="pill">Time: <span id="time">0.0s</span></span>
+        </div>
+
+        <div class="log" id="log">Ready.</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div>
+            <div style="font-weight:800;">Preview (first 5 SKUs)</div>
+            <div class="small">Filled after RUN starts parsing.</div>
+          </div>
+          <div class="small mono" id="detectedInfo"></div>
+        </div>
+        <div style="margin-top:10px; overflow:auto; max-height:420px;">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>SKU/ID</th>
+                <th>Has mismatch?</th>
+              </tr>
+            </thead>
+            <tbody id="previewBody">
+              <tr><td colspan="3" class="small">No data yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div style="font-weight:800;">Report fields</div>
+          <div class="small">The downloaded file includes:</div>
+          <div class="small mono" style="margin-top:6px;">
+            SKU;Country;Column;ExpectedLang;DetectedLang;TrustScore;Sample
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/**
+ * Super simplified German language heuristic (POC).
+ * - Stopword hit ratio for DE/EN/NL/FR
+ * - Boost DE if it contains äöüß
+ * Output: detectedLang + trustScore (0..100)
+ *
+ * This is not "AI", just deterministic heuristics.
+ */
+
+// Small but effective stopword sets
+const STOPWORDS = {
+  de: new Set(["der","die","das","und","oder","mit","ohne","für","von","im","in","am","an","auf","aus","bei","dem","den","des","ein","eine","einen","einem","einer","ist","sind","war","waren","nicht","kein","keine","auch","als","mehr","sehr","nur","zum","zur","über","unter","nach","vor","zwischen","dass","wie","so","sowie","bitte","kann","können","wird","werden","wurde","dies","diese","dieser","dieses","inkl","inklusive"]),
+  en: new Set(["the","and","or","with","without","for","from","in","on","at","by","of","a","an","is","are","was","were","not","no","also","as","more","very","only","to","over","under","after","before","between","that","this","these","those","can","will","would","included","including"]),
+  nl: new Set(["de","het","een","en","of","met","zonder","voor","van","in","op","aan","bij","uit","is","zijn","was","waren","niet","geen","ook","als","meer","zeer","alleen","tot","over","onder","na","voor","tussen","dat","dit","deze","die","kan","kunnen","wordt","worden","werd","incl","inclusief"]),
+  fr: new Set(["le","la","les","un","une","et","ou","avec","sans","pour","de","du","des","dans","sur","à","au","aux","est","sont","était","étaient","pas","aucun","aussi","comme","plus","très","seulement","vers","entre","que","ce","cette","ces","peut","peuvent","sera","seront","incl","inclus"])
+};
+
+function normalizeText(s){
+  return (s || "")
+    .toLowerCase()
+    .replace(/<[^>]*>/g, " ")      // strip HTML tags
+    .replace(/&[a-z]+;/g, " ")     // rough HTML entities
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function detectLanguageHeuristic(text){
+  const t = normalizeText(text);
+  const tokens = t.split(" ").filter(w => w.length >= 2);
+  const n = tokens.length;
+
+  // Very short text => unreliable; return "unknown" low trust
+  if (t.length < 10 || n < 3){
+    return { detected: "unknown", trust: 5, scores: {de:0,en:0,nl:0,fr:0} };
+  }
+
+  const hits = {de:0,en:0,nl:0,fr:0};
+  for (const w of tokens){
+    if (STOPWORDS.de.has(w)) hits.de++;
+    if (STOPWORDS.en.has(w)) hits.en++;
+    if (STOPWORDS.nl.has(w)) hits.nl++;
+    if (STOPWORDS.fr.has(w)) hits.fr++;
+  }
+
+  // base scores: stopword hit ratio in %
+  const scores = {
+    de: (hits.de / n) * 100,
+    en: (hits.en / n) * 100,
+    nl: (hits.nl / n) * 100,
+    fr: (hits.fr / n) * 100
+  };
+
+  // boost German for umlauts/ß
+  const umlautBoost = (/[äöüß]/i.test(text) ? 12 : 0);
+  scores.de += umlautBoost;
+
+  // pick best + second best
+  const entries = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+  const [bestLang, bestScore] = entries[0];
+  const [, secondScore] = entries[1];
+
+  // trust based on separation + text length
+  const sep = Math.max(0, bestScore - secondScore); // 0..?
+  const lenBoost = Math.min(12, Math.floor(t.length / 40)); // up to +12
+  let trust = 35 + (sep * 3) + lenBoost; // tuned for a 0..100-ish range
+  trust = Math.max(0, Math.min(100, Math.round(trust)));
+
+  // if everything is super low, mark unknown
+  if (bestScore < 2 && umlautBoost === 0){
+    return { detected: "unknown", trust: Math.min(trust, 20), scores };
+  }
+
+  return { detected: bestLang, trust, scores };
+}
+
+// CSV parsing helpers for your feed shape:
+// - each line is often wrapped in quotes and contains tabs inside
+function splitQuotedTSVLine(line){
+  let s = line;
+  // remove trailing \r
+  if (s.endsWith("\r")) s = s.slice(0,-1);
+
+  // strip one pair of outer quotes if present
+  if (s.length >= 2 && s[0] === '"' && s[s.length-1] === '"'){
+    s = s.slice(1,-1);
+  }
+
+  // unescape "" inside
+  s = s.replace(/""/g, '"');
+
+  // now split by tab
+  return s.split("\t");
+}
+
+function toSemicolonCSVRow(fields){
+  return fields.map(v=>{
+    const s = (v ?? "").toString();
+    // quote if contains special chars
+    if (/[;\n\r"]/.test(s)){
+      return `"${s.replace(/"/g,'""')}"`;
+    }
+    return s;
+  }).join(";");
+}
+
+function nowMs(){ return performance.now(); }
+
+const els = {
+  url: document.getElementById("url"),
+  file: document.getElementById("file"),
+  skuCol: document.getElementById("skuCol"),
+  minChars: document.getElementById("minChars"),
+  columns: document.getElementById("columns"),
+  run: document.getElementById("run"),
+  reset: document.getElementById("reset"),
+  download: document.getElementById("download"),
+  status: document.getElementById("status"),
+  rows: document.getElementById("rows"),
+  mismatches: document.getElementById("mismatches"),
+  time: document.getElementById("time"),
+  log: document.getElementById("log"),
+  previewBody: document.getElementById("previewBody"),
+  detectedInfo: document.getElementById("detectedInfo")
+};
+
+let reportLines = [];
+let preview = [];
+let previewMismatchSet = new Set();
+let abortRun = false;
+
+function log(msg){
+  els.log.textContent = msg + "\n" + els.log.textContent;
+}
+
+function setStatus(s){
+  els.status.textContent = s;
+}
+
+function resetUI(){
+  abortRun = false;
+  reportLines = [];
+  preview = [];
+  previewMismatchSet = new Set();
+  els.rows.textContent = "0";
+  els.mismatches.textContent = "0";
+  els.time.textContent = "0.0s";
+  els.download.disabled = true;
+  els.detectedInfo.textContent = "";
+  els.previewBody.innerHTML = `<tr><td colspan="3" class="small">No data yet.</td></tr>`;
+  setStatus("idle");
+  els.log.textContent = "Ready.";
+}
+
+els.reset.addEventListener("click", resetUI);
+
+els.download.addEventListener("click", ()=>{
+  const header = ["SKU","Country","Column","ExpectedLang","DetectedLang","TrustScore","Sample"];
+  const out = [toSemicolonCSVRow(header), ...reportLines].join("\n");
+  const blob = new Blob([out], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "de_language_mismatches_report.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+function renderPreview(){
+  if (preview.length === 0){
+    els.previewBody.innerHTML = `<tr><td colspan="3" class="small">No data yet.</td></tr>`;
+    return;
+  }
+  els.previewBody.innerHTML = preview.map((sku, idx)=>{
+    const has = previewMismatchSet.has(sku);
+    return `
+      <tr>
+        <td class="mono">${idx+1}</td>
+        <td class="mono">${escapeHtml(sku)}</td>
+        <td class="${has ? "warn":"ok"}">${has ? "YES" : "NO"}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function escapeHtml(s){
+  return (s ?? "").toString()
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function pickSkuColumn(headers){
+  // user override
+  const user = (els.skuCol.value || "").trim();
+  if (user && headers.includes(user)) return user;
+
+  const candidates = ["API_variant_code","SKU","sku","id","ID","api_productlink_ean","API_ean","ean"];
+  for (const c of candidates){
+    if (headers.includes(c)) return c;
+  }
+  // fallback first column
+  return headers[0];
+}
+
+function getColumnsToValidate(headers){
+  const wanted = els.columns.value
+    .split("\n")
+    .map(s=>s.trim())
+    .filter(Boolean);
+
+  // keep only those that exist
+  const existing = wanted.filter(c => headers.includes(c));
+  // if none match, do a reasonable default: any column with title/description/name/text and DE gallery fields
+  if (existing.length === 0){
+    return headers.filter(h =>
+      /title|description|name|keywords|text/i.test(h) || /_DE_/i.test(h)
+    ).slice(0, 25);
+  }
+  return existing;
+}
+
+function shouldSkipValue(val, minChars){
+  if (!val) return true;
+  const s = val.toString().trim();
+  if (!s) return true;
+  // skip URLs / numbers-only
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/^[\d\s.,:+-]+$/.test(s)) return true;
+  return s.length < minChars;
+}
+
+async function runFromTextStream(getChunkReader){
+  resetUI();
+  setStatus("running");
+  els.run.disabled = true;
+
+  const t0 = nowMs();
+  let processed = 0;
+  let mismatchCount = 0;
+
+  // read stream -> lines
+  const decoder = new TextDecoder("utf-8");
+  const reader = getChunkReader();
+
+  let buf = "";
+  let headers = null;
+  let skuColumn = null;
+  let columnsToValidate = null;
+
+  const minChars = Math.max(5, parseInt(els.minChars.value || "25", 10) || 25);
+
+  function updateStats(){
+    els.rows.textContent = String(processed);
+    els.mismatches.textContent = String(mismatchCount);
+    els.time.textContent = ((nowMs()-t0)/1000).toFixed(1) + "s";
+  }
+
+  // for report download
+  reportLines = [];
+
+  // helper: process one line
+  function processLine(line){
+    if (abortRun) return;
+
+    if (!line || !line.trim()) return;
+
+    const parts = splitQuotedTSVLine(line);
+
+    // header line
+    if (!headers){
+      headers = parts;
+      skuColumn = pickSkuColumn(headers);
+      columnsToValidate = getColumnsToValidate(headers);
+
+      els.detectedInfo.textContent = `SKU column: ${skuColumn} • Checking: ${columnsToValidate.length} cols`;
+      log(`Detected ${headers.length} columns.`);
+      log(`SKU column => ${skuColumn}`);
+      log(`Validating columns => ${columnsToValidate.join(", ")}`);
+      return;
+    }
+
+    // data row
+    const row = {};
+    for (let i=0;i<headers.length;i++){
+      row[headers[i]] = parts[i] ?? "";
+    }
+
+    processed++;
+
+    const sku = (row[skuColumn] || row["id"] || "").toString().trim() || `ROW_${processed}`;
+    if (preview.length < 5 && !preview.includes(sku)){
+      preview.push(sku);
+      renderPreview();
+    }
+
+    let rowHasMismatch = false;
+
+    for (const col of columnsToValidate){
+      const val = row[col];
+      if (shouldSkipValue(val, minChars)) continue;
+
+      const { detected, trust } = detectLanguageHeuristic(val);
+      const expected = "de";
+
+      // mismatch if confidently not German (or unknown but still somewhat confident)
+      // You can tighten this rule later.
+      const isMismatch = (detected !== "de" && detected !== "unknown") && trust >= 45;
+
+      if (isMismatch){
+        rowHasMismatch = true;
+        mismatchCount++;
+
+        const sample = normalizeText(val).slice(0, 140);
+        // SKU;Country;Column;ExpectedLang;DetectedLang;TrustScore;Sample
+        reportLines.push(toSemicolonCSVRow([sku, "DE", col, expected, detected, String(trust), sample]));
+      }
+    }
+
+    if (rowHasMismatch){
+      previewMismatchSet.add(sku);
+      renderPreview();
+    }
+
+    // update UI occasionally
+    if (processed % 250 === 0){
+      updateStats();
+    }
+  }
+
+  try{
+    while(true){
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, {stream:true});
+
+      // split into lines
+      let idx;
+      while ((idx = buf.indexOf("\n")) !== -1){
+        const line = buf.slice(0, idx);
+        buf = buf.slice(idx+1);
+        processLine(line);
+        if (abortRun) break;
+      }
+      if (abortRun) break;
+    }
+
+    // last line
+    if (!abortRun && buf.trim()){
+      processLine(buf);
+    }
+
+    updateStats();
+    setStatus(abortRun ? "aborted" : "done");
+
+    if (reportLines.length > 0){
+      els.download.disabled = false;
+      log(`Done. Found ${reportLines.length} mismatches.`);
+    }else{
+      log("Done. No mismatches found (for the checked columns / threshold).");
+    }
+  }catch(err){
+    console.error(err);
+    setStatus("error");
+    log("ERROR: " + (err?.message || String(err)));
+    log("Tip: If this is a CORS error, download the file and use the upload input.");
+  }finally{
+    els.run.disabled = false;
+  }
+}
+
+els.run.addEventListener("click", async ()=>{
+  abortRun = false;
+
+  const file = els.file.files?.[0];
+  if (file){
+    // File streaming
+    const stream = file.stream();
+    const reader = stream.getReader();
+    return runFromTextStream(()=>reader);
+  }
+
+  const url = (els.url.value || "").trim();
+  if (!url){
+    log("Please provide a URL or upload a file.");
+    return;
+  }
+
+  // Fetch streaming
+  const res = await fetch(url, {method:"GET"});
+  if (!res.ok){
+    log(`Fetch failed: HTTP ${res.status}`);
+    return;
+  }
+  if (!res.body){
+    log("Streaming not supported in this browser for fetch(). Try file upload.");
+    return;
+  }
+  const reader = res.body.getReader();
+  return runFromTextStream(()=>reader);
+});
+
+// init
+resetUI();
+</script>
+</body>
+</html>
